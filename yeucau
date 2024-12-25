@@ -19,3 +19,149 @@ Lấy số liệu tại dòng báo cáo 5. NV04.Danh sách khoản vay đảm b�
 - Bước 9: Cột (LTV hiện tại): (=) (Dư nợ cho vay theo tài sản)/(Giá trị tài sản hiện tại)
 - Bước 10: Cột (Chênh lệch LTV) = (Tỷ lệ % cho vay) - (LTV hiện tại).
 - Bước 11: Lọc chọn Cột (Chênh lệch LTV) < 0
+Sub ProcessStockCollateralReports()
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+    
+    Dim kt06Wb As Workbook
+    Dim cl31Wb As Workbook
+    Dim cl32Wb As Workbook
+    Dim resultSheet As Worksheet
+    Dim lastRow As Long
+    Dim i As Long
+    
+    ' Open required workbooks
+    Set kt06Wb = Workbooks.Open("path_to_KT06_report.xlsx")
+    Set cl31Wb = Workbooks.Open("path_to_CL31_report.xlsx")
+    Set cl32Wb = Workbooks.Open("path_to_CL32_report.xlsx")
+    
+    ' Create result worksheet in active workbook
+    Set resultSheet = ThisWorkbook.Sheets.Add
+    resultSheet.Name = "Stock_Analysis_" & Format(Date, "yyyymmdd")
+    
+    ' Set up headers
+    With resultSheet
+        .Cells(1, 1).Value = "COLLATERAL_CODE"
+        .Cells(1, 2).Value = "Giá cũ"
+        .Cells(1, 3).Value = "Mã cổ phiếu"
+        .Cells(1, 4).Value = "Số lượng CP"
+        .Cells(1, 5).Value = "Tỷ lệ % cho vay"
+        .Cells(1, 6).Value = "Dư nợ theo tài sản"
+        .Cells(1, 7).Value = "Giá trị tài sản hiện tại"
+        .Cells(1, 8).Value = "LTV hiện tại"
+        .Cells(1, 9).Value = "Chênh lệch LTV"
+    End With
+    
+    ' Filter and process KT06 data
+    With kt06Wb.Sheets(1)
+        lastRow = .Cells(.Rows.Count, "A").End(xlUp).Row
+        
+        ' Filter for stock collateral
+        .Range("A1:Z" & lastRow).AutoFilter Field:=FindColumnByHeader(kt06Wb.Sheets(1), "COLLATERAL_TYPE_DESCRIPTION"), _
+            Criteria1:="Cổ phiếu do các Doanh nghiệp khác phát hành được niêm yết trên SGD chứng khoán"
+            
+        ' Process each row
+        For i = 2 To lastRow
+            If Not .Rows(i).Hidden Then
+                ProcessStockRow i, resultSheet, cl31Wb, cl32Wb
+            End If
+        Next i
+        
+        ' Remove filter
+        .AutoFilterMode = False
+    End With
+    
+    ' Calculate additional metrics
+    CalculateMetrics resultSheet
+    
+    ' Filter results where Chênh lệch LTV < 0
+    FilterNegativeLTV resultSheet
+    
+    ' Clean up
+    kt06Wb.Close SaveChanges:=False
+    cl31Wb.Close SaveChanges:=False
+    cl32Wb.Close SaveChanges:=False
+    
+    Application.ScreenUpdating = True
+    Application.DisplayAlerts = True
+    
+    MsgBox "Analysis completed!", vbInformation
+End Sub
+
+Private Sub ProcessStockRow(rowNum As Long, resultSheet As Worksheet, cl31Wb As Workbook, cl32Wb As Workbook)
+    Dim collateralCode As String
+    Dim initValue As Double
+    Dim stockQty As Double
+    
+    With resultSheet
+        ' Get collateral code
+        collateralCode = Cells(rowNum, FindColumnByHeader(ActiveSheet, "COLLATERAL_CODE")).Value
+        
+        ' Calculate old price (Bước 3)
+        initValue = Cells(rowNum, FindColumnByHeader(ActiveSheet, "INIT_VALUE")).Value
+        stockQty = Cells(rowNum, FindColumnByHeader(ActiveSheet, "AB")).Value ' Assuming AB is the stock quantity column
+        
+        .Cells(.Rows.Count, 1).End(xlUp).Offset(1, 0).Value = collateralCode
+        .Cells(.Rows.Count, 1).End(xlUp).Offset(0, 1).Value = initValue / stockQty
+        
+        ' Get stock code from CL31 (Bước 4)
+        .Cells(.Rows.Count, 1).End(xlUp).Offset(0, 2).Value = GetStockCodeFromCL31(collateralCode, cl31Wb)
+        
+        ' Get stock quantity from CL31 (Bước 5)
+        .Cells(.Rows.Count, 1).End(xlUp).Offset(0, 3).Value = GetStockQuantityFromCL31(collateralCode, cl31Wb)
+        
+        ' Get loan percentage from CL31 (Bước 6)
+        .Cells(.Rows.Count, 1).End(xlUp).Offset(0, 4).Value = GetLoanPercentageFromCL31(collateralCode, cl31Wb)
+        
+        ' Get loan balance from CL32 (Bước 7)
+        .Cells(.Rows.Count, 1).End(xlUp).Offset(0, 5).Value = CalculateLoanBalance(collateralCode, cl32Wb)
+    End With
+End Sub
+
+Private Function FindColumnByHeader(ws As Worksheet, headerName As String) As Long
+    Dim lastCol As Long
+    Dim i As Long
+    
+    lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+    
+    For i = 1 To lastCol
+        If ws.Cells(1, i).Value = headerName Then
+            FindColumnByHeader = i
+            Exit Function
+        End If
+    Next i
+    
+    FindColumnByHeader = 0
+End Function
+
+Private Sub CalculateMetrics(resultSheet As Worksheet)
+    Dim lastRow As Long
+    Dim i As Long
+    
+    With resultSheet
+        lastRow = .Cells(.Rows.Count, 1).End(xlUp).Row
+        
+        For i = 2 To lastRow
+            ' Calculate current asset value (Bước 8)
+            .Cells(i, 7).Formula = "=D" & i & "*" & GetCurrentStockPrice(.Cells(i, 3).Value)
+            
+            ' Calculate current LTV (Bước 9)
+            .Cells(i, 8).Formula = "=F" & i & "/G" & i
+            
+            ' Calculate LTV difference (Bước 10)
+            .Cells(i, 9).Formula = "=E" & i & "-H" & i
+        Next i
+    End With
+End Sub
+
+Private Sub FilterNegativeLTV(resultSheet As Worksheet)
+    With resultSheet
+        .Range("A1:I" & .Cells(.Rows.Count, 1).End(xlUp).Row).AutoFilter Field:=9, Criteria1:="<0"
+    End With
+End Sub
+
+Private Function GetCurrentStockPrice(stockCode As String) As Double
+    ' This function should be implemented to get current stock price from market data
+    ' You might want to use web scraping or API calls here
+    GetCurrentStockPrice = 0 ' Placeholder
+End Function
