@@ -1,0 +1,97 @@
+Sub MergeWorkbooksToSheets_Unicode()
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+    Application.EnableEvents = False
+    
+    Dim mainWorkbook As Workbook
+    Dim sourceWorkbook As Workbook
+    Dim sourceSheet As Worksheet
+    Dim folderPath As String
+    Dim fileName As String
+    Dim newSheet As Worksheet
+    Dim fso As Object
+    Dim folder As Object
+    Dim file As Object
+    Dim sanitizedSheetName As String
+    Dim invalidChars As Variant
+    
+    ' Configure folder path
+    folderPath = "C:\FolderPath\" ' Replace with your folder path
+    If Right(folderPath, 1) <> "\" Then folderPath = folderPath & "\"
+    
+    ' Check if folder exists
+    If Dir(folderPath, vbDirectory) = "" Then
+        MsgBox "Folder not found! Please check the path.", vbCritical
+        Exit Sub
+    End If
+    
+    Set mainWorkbook = ThisWorkbook
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    Set folder = fso.GetFolder(folderPath)
+    
+    ' Array of invalid characters
+    invalidChars = Array("/", "\", ":", "*", "?", "[", "]", " ")
+    
+    ' Process each file
+    For Each file In folder.Files
+        If LCase(Right(file.Name, 5)) = ".xlsx" And _
+           StrComp(file.Path, mainWorkbook.FullName, vbTextCompare) <> 0 Then
+            
+            Set sourceWorkbook = Workbooks.Open(file.Path, UpdateLinks:=0, ReadOnly:=True)
+            
+            ' Process each sheet
+            For Each sourceSheet In sourceWorkbook.Sheets
+                sanitizedSheetName = CreateSanitizedSheetName(sourceSheet.Name, file.Name, invalidChars)
+                
+                ' Create new sheet
+                If Not SheetExists(sanitizedSheetName, mainWorkbook) Then
+                    Set newSheet = mainWorkbook.Sheets.Add(After:=mainWorkbook.Sheets(mainWorkbook.Sheets.Count))
+                    newSheet.Name = sanitizedSheetName
+                Else
+                    Set newSheet = mainWorkbook.Sheets(sanitizedSheetName)
+                End If
+                
+                ' Copy data
+                With sourceSheet.UsedRange
+                    .Copy
+                    newSheet.Range("A1").PasteSpecial xlPasteAll
+                End With
+            Next sourceSheet
+            
+            sourceWorkbook.Close SaveChanges:=False
+        End If
+    Next file
+    
+    Application.ScreenUpdating = True
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    
+    MsgBox "All files have been successfully merged!", vbInformation
+End Sub
+
+Private Function CreateSanitizedSheetName(ByVal sheetName As String, ByVal fileName As String, ByVal invalidChars As Variant) As String
+    Dim result As String
+    Dim i As Long
+    
+    ' Create new sheet name
+    result = sheetName & "_" & Replace(fileName, ".xlsx", "")
+    
+    ' Replace invalid characters
+    For i = LBound(invalidChars) To UBound(invalidChars)
+        result = Replace(result, invalidChars(i), "_")
+    Next i
+    
+    ' Limit sheet name length
+    If Len(result) > 31 Then result = Left(result, 31)
+    
+    CreateSanitizedSheetName = result
+End Function
+
+Private Function SheetExists(ByVal sheetName As String, ByVal wb As Workbook) As Boolean
+    Dim ws As Worksheet
+    
+    On Error Resume Next
+    Set ws = wb.Sheets(sheetName)
+    SheetExists = Not ws Is Nothing
+    On Error GoTo 0
+End Function
