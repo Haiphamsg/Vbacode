@@ -1,0 +1,374 @@
+Option Explicit
+
+Sub ProcessStockCollateralReports()
+    On Error GoTo ErrorHandler
+    
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+    Application.Calculation = xlCalculationManual
+    
+    Dim kt06Wb As Workbook
+    Dim cl31Wb As Workbook
+    Dim cl32Wb As Workbook
+    Dim resultSheet As Worksheet
+    Dim lastRow As Long
+    Dim i As Long
+    Dim filePath As String
+    
+    ' Set file paths
+    filePath = "C:\Users\haipn1\Desktop\báo cáo C Linh\report_25122024\"
+    
+    ' Check if files exist
+    If Not FileExists(filePath & "KT06.xlsx") Or _
+       Not FileExists(filePath & "CL31.HM-LM002.xlsx") Or _
+       Not FileExists(filePath & "CL32.xlsx") Then
+        MsgBox "One or more required files not found!", vbCritical
+        GoTo CleanExit
+    End If
+    
+    ' Open required workbooks
+    Set kt06Wb = Workbooks.Open(filePath & "KT06.xlsx")
+    Set cl31Wb = Workbooks.Open(filePath & "CL31.HM-LM002.xlsx")
+    Set cl32Wb = Workbooks.Open(filePath & "CL32.xlsx")
+    
+    ' Create result worksheet
+    Set resultSheet = ThisWorkbook.Sheets.Add
+    resultSheet.Name = "NV04_" & Format(Date, "yyyymmdd")
+    
+    ' Set up headers
+    SetupHeaders resultSheet
+    
+    ' Process KT06 data
+    With kt06Wb.Sheets(1)
+        lastRow = .Cells(.Rows.Count, "A").End(xlUp).Row
+        
+        ' Verify required columns exist
+        If Not VerifyRequiredColumns(kt06Wb.Sheets(1)) Then
+            MsgBox "Required columns missing in KT06!", vbCritical
+            GoTo CleanExit
+        End If
+        
+        ' Filter for stock collateral
+        .Range("A1:AZ" & lastRow).AutoFilter Field:=FindColumnByHeader(kt06Wb.Sheets(1), "COLLATERAL_TYPE_DESCRIPTION"), _
+            Criteria1:="Co phieu chua duoc niem yet do Doanh nghiep chua niem yet co phieu tren SGD chung khoan phat hanh"
+            
+        ' Process visible rows
+        For i = 2 To lastRow
+            If Not .Rows(i).Hidden Then
+                ProcessStockRow i, resultSheet, kt06Wb.Sheets(1), cl31Wb, cl32Wb
+            End If
+        Next i
+        
+        .AutoFilterMode = False
+    End With
+    
+    ' Calculate metrics and apply formatting
+    CalculateMetrics resultSheet
+    FormatResultSheet resultSheet
+    
+    ' Filter negative LTV difference
+    FilterNegativeLTV resultSheet
+
+CleanExit:
+    ' Clean up
+    If Not kt06Wb Is Nothing Then kt06Wb.Close SaveChanges:=False
+    If Not cl31Wb Is Nothing Then cl31Wb.Close SaveChanges:=False
+    If Not cl32Wb Is Nothing Then cl32Wb.Close SaveChanges:=False
+    
+    Application.ScreenUpdating = True
+    Application.DisplayAlerts = True
+    Application.Calculation = xlCalculationAutomatic
+    
+    MsgBox "Process completed!", vbInformation
+    Exit Sub
+
+ErrorHandler:
+    MsgBox "Error: " & Err.Description, vbCritical
+    Resume CleanExit
+End Sub
+
+Private Sub SetupHeaders(ws As Worksheet)
+    With ws
+        .Cells(1, 1).Resize(1, 33).Value = Array( _
+            "BRANCH_CODE", "BRANCH_NAME", "CUSTOMER_ID", "CUSTOMER_NAME", _
+            "ACCOUNT_NUMBER", "AMOUNT_FINANCED", "OUTSTANDING_LCY", "LOAN_PURPOSE", _
+            "LOAN_PRODUCT", "OFFICER", "FULL_NAME", "COLLATERAL_TYPE", _
+            "COLLATERAL_CODE", "COLLATERAL_NAME", "COLLATERAL_TYPE_DESCRIPTION", _
+            "COLLATERAL_CUST_ID", "COLLATERAL_CUSTOMER_NAME", "COLLATERAL_CODE1", _
+            "COLLATERAL_DESCRIPTION", "COLLATERAL_CURRENCY", "START_DATE", _
+            "LAST_AMND_DATE", "INIT_VALUE", "COLLATERAL_VALUE", "LENDABLE_MARGIN", _
+            "OLD_PRICE", "STOCK_CODE", "STOCK_QUANTITY", "LOAN_PERCENTAGE", _
+            "LOAN_BALANCE_BY_ASSET", "CURRENT_ASSET_VALUE", "CURRENT_LTV", "DIFFERENCE_LTV")
+    End With
+End Sub
+
+Private Sub ProcessStockRow(ByVal rowNum As Long, resultSheet As Worksheet, sourceWs As Worksheet, _
+                          cl31Wb As Workbook, cl32Wb As Workbook)
+    Dim collateralCode As String
+    Dim initValue As Double
+    Dim stockQty As Double
+    Dim lastRow As Long
+    Dim targetRow As Long
+    
+    ' Get values from source
+    collateralCode = sourceWs.Cells(rowNum, FindColumnByHeader(sourceWs, "COLLATERAL_CODE")).Value
+    initValue = SafeGetValue(sourceWs.Cells(rowNum, FindColumnByHeader(sourceWs, "INIT_VALUE")))
+    stockQty = SafeGetValue(sourceWs.Cells(rowNum, FindColumnByHeader(sourceWs, "STOCK_QUANTITY")))
+    
+    ' Get target row in result sheet
+    targetRow = resultSheet.Cells(resultSheet.Rows.Count, 1).End(xlUp).Row + 1
+    
+    ' Copy basic information
+    CopyRowData sourceWs, resultSheet, rowNum, targetRow
+    
+    ' Calculate and set additional values
+    With resultSheet
+        If stockQty <> 0 Then
+            .Cells(targetRow, 26).Value = initValue / stockQty  ' OLD_PRICE
+        End If
+        
+        .Cells(targetRow, 27).Value = GetStockCodeFromCL31(collateralCode, cl31Wb)    ' STOCK_CODE
+        .Cells(targetRow, 28).Value = stockQty                                         ' STOCK_QUANTITY
+        .Cells(targetRow, 29).Value = GetLoanPercentageFromCL31(collateralCode, cl31Wb) ' LOAN_PERCENTAGE
+        .Cells(targetRow, 30).Value = CalculateLoanBalance(collateralCode, cl32Wb)    ' LOAN_BALANCE
+    End With
+End Sub
+
+Private Sub CalculateMetrics(ws As Worksheet)
+    Dim lastRow As Long
+    Dim i As Long
+    
+    lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    
+    For i = 2 To lastRow
+        With ws
+            ' Current Asset Value = Stock Quantity * Current Price
+            .Cells(i, 31).Formula = "=IF(AB" & i & "<>0,AB" & i & "*" & _
+                                   GetCurrentStockPrice(.Cells(i, 27).Value) & ",0)"
+            
+            ' Current LTV = Loan Balance / Current Asset Value
+            .Cells(i, 32).Formula = "=IF(AE" & i & "<>0,AD" & i & "/AE" & i & ",0)"
+            
+            ' LTV Difference = Loan Percentage - Current LTV
+            .Cells(i, 33).Formula = "=AC" & i & "-AF" & i
+        End With
+    Next i
+End Sub
+
+Private Sub FormatResultSheet(ws As Worksheet)
+    With ws
+        ' Format numbers
+        .Range("W:AE").NumberFormat = "#,##0.00"
+        
+        ' Format percentages
+        .Range("AC:AG").NumberFormat = "0.00%"
+        
+        ' AutoFit columns
+        .Cells.EntireColumn.AutoFit
+        
+        ' Add filters
+        .Range("A1").CurrentRegion.AutoFilter
+    End With
+End Sub
+
+Private Function SafeGetValue(cell As Range) As Double
+    On Error Resume Next
+    SafeGetValue = CDbl(cell.Value)
+    If Err.Number <> 0 Then SafeGetValue = 0
+    On Error GoTo 0
+End Function
+
+Private Function FileExists(filePath As String) As Boolean
+    FileExists = Dir(filePath) <> ""
+End Function
+
+Private Function VerifyRequiredColumns(ws As Worksheet) As Boolean
+    Dim requiredColumns As Variant
+    Dim col As Variant
+    
+    requiredColumns = Array("COLLATERAL_CODE", "INIT_VALUE", "STOCK_QUANTITY", _
+                           "COLLATERAL_TYPE_DESCRIPTION")
+    
+    For Each col In requiredColumns
+        If FindColumnByHeader(ws, CStr(col)) = 0 Then
+            VerifyRequiredColumns = False
+            Exit Function
+        End If
+    Next col
+    
+    VerifyRequiredColumns = True
+End Function
+
+
+Private Function GetStockCodeFromCL31(ByVal collateralCode As String, cl31Wb As Workbook) As String
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim foundRange As Range
+    
+    Set ws = cl31Wb.Sheets(1)
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    ' Find collateral code in CL31
+    Set foundRange = ws.Range("A2:A" & lastRow).Find( _
+        What:=collateralCode, _
+        LookIn:=xlValues, _
+        LookAt:=xlWhole, _
+        MatchCase:=False)
+    
+    If Not foundRange Is Nothing Then
+        ' Get stock code from Stock Code column
+        GetStockCodeFromCL31 = ws.Cells(foundRange.Row, FindColumnByHeader(ws, "STOCK_CODE")).Value
+    Else
+        GetStockCodeFromCL31 = ""
+    End If
+End Function
+
+Private Function GetLoanPercentageFromCL31(ByVal collateralCode As String, cl31Wb As Workbook) As Double
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim foundRange As Range
+    
+    Set ws = cl31Wb.Sheets(1)
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    Set foundRange = ws.Range("A2:A" & lastRow).Find( _
+        What:=collateralCode, _
+        LookIn:=xlValues, _
+        LookAt:=xlWhole, _
+        MatchCase:=False)
+    
+    If Not foundRange Is Nothing Then
+        GetLoanPercentageFromCL31 = SafeGetValue(ws.Cells(foundRange.Row, FindColumnByHeader(ws, "LOAN_PERCENTAGE")))
+    Else
+        GetLoanPercentageFromCL31 = 0
+    End If
+End Function
+
+Private Function CalculateLoanBalance(ByVal collateralCode As String, cl32Wb As Workbook) As Double
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim i As Long
+    Dim accountDict As Object
+    Dim collateralDict As Object
+    
+    Set ws = cl32Wb.Sheets(1)
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    ' Use Dictionary to store temporary data
+    Set accountDict = CreateObject("Scripting.Dictionary")
+    Set collateralDict = CreateObject("Scripting.Dictionary")
+    
+    ' Step 1: Calculate total loan balance and collateral value for each account
+    For i = 2 To lastRow
+        Dim accNum As String
+        Dim outstandingLcy As Double
+        Dim collateralValue As Double
+        
+        accNum = ws.Cells(i, FindColumnByHeader(ws, "ACCOUNT_NUMBER")).Value
+        outstandingLcy = SafeGetValue(ws.Cells(i, FindColumnByHeader(ws, "OUTSTANDING_LCY")))
+        collateralValue = SafeGetValue(ws.Cells(i, FindColumnByHeader(ws, "COLLATERAL_VALUE")))
+        
+        If Not accountDict.Exists(accNum) Then
+            accountDict(accNum) = Array(outstandingLcy, collateralValue)
+        Else
+            Dim currentValues As Variant
+            currentValues = accountDict(accNum)
+            accountDict(accNum) = Array(currentValues(0) + outstandingLcy, currentValues(1) + collateralValue)
+        End If
+    Next i
+    
+    ' Step 2: Calculate loan balance by collateral code
+    For i = 2 To lastRow
+        Dim acc As String
+        Dim tsbd As String
+        Dim values As Variant
+        
+        acc = ws.Cells(i, FindColumnByHeader(ws, "ACCOUNT_NUMBER")).Value
+        tsbd = ws.Cells(i, FindColumnByHeader(ws, "COLLATERAL_CODE")).Value
+        collateralValue = SafeGetValue(ws.Cells(i, FindColumnByHeader(ws, "COLLATERAL_VALUE")))
+        
+        If accountDict.Exists(acc) Then
+            values = accountDict(acc)
+            
+            If values(1) <> 0 Then
+                Dim loanByCollateral As Double
+                loanByCollateral = (values(0) / values(1)) * collateralValue
+                
+                If Not collateralDict.Exists(tsbd) Then
+                    collateralDict(tsbd) = loanByCollateral
+                Else
+                    collateralDict(tsbd) = collateralDict(tsbd) + loanByCollateral
+                End If
+            End If
+        End If
+    Next i
+    
+    ' Return result for requested collateral code
+    If collateralDict.Exists(collateralCode) Then
+        CalculateLoanBalance = collateralDict(collateralCode)
+    Else
+        CalculateLoanBalance = 0
+    End If
+End Function
+
+Private Function GetCurrentStockPrice(ByVal stockCode As String) As Double
+    If stockCode = "" Then Exit Function
+    
+    Dim priceWb As Workbook
+    Dim priceWs As Worksheet
+    Dim lastRow As Long
+    Dim foundRange As Range
+    Dim filePath As String
+    
+    filePath = "C:\Users\haipn1\Desktop\báo cáo C Linh\report_25122024\history-2024-12-19.csv"
+    
+    If Not FileExists(filePath) Then
+        MsgBox "Stock price file not found!", vbExclamation
+        Exit Function
+    End If
+    
+    On Error Resume Next
+    Set priceWb = Workbooks.Open(filePath)
+    If Err.Number <> 0 Then
+        MsgBox "Error opening stock price file: " & Err.Description, vbExclamation
+        Exit Function
+    End If
+    On Error GoTo 0
+    
+    Set priceWs = priceWb.Sheets(1)
+    lastRow = priceWs.Cells(priceWs.Rows.Count, "A").End(xlUp).Row
+    
+    Set foundRange = priceWs.Range("A2:A" & lastRow).Find( _
+        What:=stockCode, _
+        LookIn:=xlValues, _
+        LookAt:=xlWhole, _
+        MatchCase:=False)
+    
+    If Not foundRange Is Nothing Then
+        GetCurrentStockPrice = SafeGetValue(priceWs.Cells(foundRange.Row, FindColumnByHeader(priceWs, "PRICE")))
+    End If
+    
+    priceWb.Close SaveChanges:=False
+End Function
+
+Private Sub CopyRowData(sourceWs As Worksheet, targetWs As Worksheet, sourceRow As Long, targetRow As Long)
+    Dim i As Long
+    Dim sourceCol As Long
+    Dim targetCol As Long
+    
+    For i = 1 To 25 ' Copy first 25 columns of basic data
+        sourceCol = i
+        targetCol = i
+        targetWs.Cells(targetRow, targetCol).Value = sourceWs.Cells(sourceRow, sourceCol).Value
+    Next i
+End Sub
+
+Private Sub FilterNegativeLTV(ws As Worksheet)
+    Dim lastRow As Long
+    lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    
+    With ws
+        .Range("A1:AG" & lastRow).AutoFilter Field:=33, Criteria1:"<0"
+        .Range("A1:AG" & lastRow).AutoFilter Field:=32, Criteria1:"<>0"
+    End With
+End Sub
