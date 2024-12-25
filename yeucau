@@ -165,3 +165,160 @@ Private Function GetCurrentStockPrice(stockCode As String) As Double
     ' You might want to use web scraping or API calls here
     GetCurrentStockPrice = 0 ' Placeholder
 End Function
+Private Function GetStockCodeFromCL31(collateralCode As String, cl31Wb As Workbook) As String
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim foundRange As Range
+    
+    Set ws = cl31Wb.Sheets(1)
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    ' Tìm mã tài sản trong CL31
+    Set foundRange = ws.Range("A2:A" & lastRow).Find(collateralCode, LookIn:=xlValues, LookAt:=xlWhole)
+    
+    If Not foundRange Is Nothing Then
+        ' Lấy mã CK từ cột Mã CK (giả sử ở cột E)
+        GetStockCodeFromCL31 = ws.Cells(foundRange.Row, "E").Value
+    Else
+        GetStockCodeFromCL31 = ""
+    End If
+End Function
+
+Private Function GetStockQuantityFromCL31(collateralCode As String, cl31Wb As Workbook) As Double
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim foundRange As Range
+    
+    Set ws = cl31Wb.Sheets(1)
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    ' Tìm mã tài sản trong CL31
+    Set foundRange = ws.Range("A2:A" & lastRow).Find(collateralCode, LookIn:=xlValues, LookAt:=xlWhole)
+    
+    If Not foundRange Is Nothing Then
+        ' Lấy số lượng chứng khoán (giả sử ở cột F)
+        GetStockQuantityFromCL31 = CDbl(ws.Cells(foundRange.Row, "F").Value)
+    Else
+        GetStockQuantityFromCL31 = 0
+    End If
+End Function
+
+Private Function GetLoanPercentageFromCL31(collateralCode As String, cl31Wb As Workbook) As Double
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim foundRange As Range
+    
+    Set ws = cl31Wb.Sheets(1)
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    ' Tìm mã tài sản trong CL31
+    Set foundRange = ws.Range("A2:A" & lastRow).Find(collateralCode, LookIn:=xlValues, LookAt:=xlWhole)
+    
+    If Not foundRange Is Nothing Then
+        ' Lấy tỷ lệ % cho vay (giả sử ở cột G)
+        GetLoanPercentageFromCL31 = CDbl(ws.Cells(foundRange.Row, "G").Value)
+    Else
+        GetLoanPercentageFromCL31 = 0
+    End If
+End Function
+
+Private Function CalculateLoanBalance(collateralCode As String, cl32Wb As Workbook) As Double
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim i As Long
+    Dim accountDict As Object
+    Dim collateralDict As Object
+    
+    Set ws = cl32Wb.Sheets(1)
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    ' Sử dụng Dictionary để lưu trữ dữ liệu tạm thời
+    Set accountDict = CreateObject("Scripting.Dictionary")
+    Set collateralDict = CreateObject("Scripting.Dictionary")
+    
+    ' Bước 1: Tính tổng dư nợ và giá trị đảm bảo cho mỗi tài khoản
+    For i = 2 To lastRow
+        Dim accNum As String
+        Dim outstandingLcy As Double
+        Dim giaTriDamBao As Double
+        
+        accNum = ws.Cells(i, "A").Value ' Giả sử ACCOUNT_NUMBER ở cột A
+        outstandingLcy = CDbl(ws.Cells(i, "B").Value) ' Giả sử OUTSTANDING_LCY ở cột B
+        giaTriDamBao = CDbl(ws.Cells(i, "C").Value) ' Giả sử GIA_TRI_DAM_BAO_DINH_GIA ở cột C
+        
+        If Not accountDict.Exists(accNum) Then
+            accountDict(accNum) = Array(outstandingLcy, giaTriDamBao)
+        Else
+            Dim currentValues As Variant
+            currentValues = accountDict(accNum)
+            accountDict(accNum) = Array(currentValues(0) + outstandingLcy, currentValues(1) + giaTriDamBao)
+        End If
+    Next i
+    
+    ' Bước 2: Tính dư nợ theo mã TSBD
+    For i = 2 To lastRow
+        Dim acc As String
+        Dim tsbd As String
+        Dim values As Variant
+        
+        acc = ws.Cells(i, "A").Value
+        tsbd = ws.Cells(i, "D").Value ' Giả sử COLLATERAL_CODE ở cột D
+        giaTriDamBao = CDbl(ws.Cells(i, "C").Value)
+        
+        values = accountDict(acc)
+        
+        If values(1) <> 0 Then
+            Dim sumDunoMaTsbd As Double
+            sumDunoMaTsbd = (values(0) / values(1)) * giaTriDamBao
+            
+            If Not collateralDict.Exists(tsbd) Then
+                collateralDict(tsbd) = sumDunoMaTsbd
+            Else
+                collateralDict(tsbd) = collateralDict(tsbd) + sumDunoMaTsbd
+            End If
+        End If
+    Next i
+    
+    ' Trả về kết quả cho mã TSBD được yêu cầu
+    If collateralDict.Exists(collateralCode) Then
+        CalculateLoanBalance = collateralDict(collateralCode)
+    Else
+        CalculateLoanBalance = 0
+    End If
+End Function
+
+Private Function GetCurrentStockPrice(stockCode As String) As Double
+    ' Function này cần được implement theo nguồn dữ liệu giá cổ phiếu thực tế
+    ' Ví dụ: đọc từ file Excel chứa giá cổ phiếu
+    Dim priceWb As Workbook
+    Dim priceWs As Worksheet
+    Dim lastRow As Long
+    Dim foundRange As Range
+    
+    On Error Resume Next
+    Set priceWb = Workbooks.Open("path_to_stock_prices.xlsx")
+    Set priceWs = priceWb.Sheets(1)
+    
+    lastRow = priceWs.Cells(priceWs.Rows.Count, "A").End(xlUp).Row
+    Set foundRange = priceWs.Range("A2:A" & lastRow).Find(stockCode, LookIn:=xlValues, LookAt:=xlWhole)
+    
+    If Not foundRange Is Nothing Then
+        GetCurrentStockPrice = CDbl(priceWs.Cells(foundRange.Row, "B").Value) ' Giả sử giá ở cột B
+    Else
+        GetCurrentStockPrice = 0
+    End If
+    
+    priceWb.Close SaveChanges:=False
+    On Error GoTo 0
+End Function
+
+Private Sub ErrorHandler()
+    ' Xử lý lỗi chung
+    MsgBox "An error occurred: " & Err.Description, vbCritical
+    On Error Resume Next
+    Application.ScreenUpdating = True
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    On Error GoTo 0
+End Sub
+
