@@ -1,0 +1,21 @@
+Tại báo cáo KT06-Bao cao tong hop kiem tra cua QLRR:
+Lấy số liệu tại dòng báo cáo 5. NV04.Danh sách khoản vay đảm bảo bằng cổ phiếu. Trong đó:
+- Bước 1: Tại cột COLLATERAL_TYPE_DESCRIPTION: lọc chọn <<Cổ phiếu do các Doanh nghiệp khác phát hành được niêm yết trên SGD chứng khoán>>
+- Bước 2: Tạo cột mới gồm: Giá cũ| Mã cổ phiếu| Số lượng CP| Tỷ lệ % cho vay | Dư nợ theo tài sản| Giá trị tài sản hiện tại| LTV hiện tại| Chênh lệch LTV.
+- Bước 3: Cột (Giá cũ)(=) Giá trị tại Cột W (INIT_VALUE)/Giá trị tại Cột AB (Số lượng CP).
+- Bước 4: Cột (Mã cổ phiếu) = Dò tìm theo Mã tài sản tại cột COLLATERAL_CODE với Báo cáo CL31.HM-LM002-Sao ke chi tiet khach hang co tai san bao dam-ALL, lấy dữ liệu tại cột Mã CK.
+- Bước 5: Cột (Số lượng CP): Dò tìm theo Mã tài sản tại cột COLLATERAL_CODE với Báo cáo CL31.HM-LM002-Sao ke chi tiet khach hang co tai san bao dam-ALL, lấy số lượng cổ phiếu tại cột Số lượng chứng khoán.
+- Bước 6: Cột (Tỷ lệ % cho vay):  Dò tìm theo Mã tài sản tại cột COLLATERAL_CODE với Báo cáo CL31.HM-LM002-Sao ke chi tiet khach hang co tai san bao dam-ALL, lấy số liệu (Tỷ lệ % cho vay) tại cột % CHO VAY.
+- Bước 7: Xác định cột (Dư nợ theo tài sản): Xuất báo cáo CL32 - Sao kê chi tiết tài sản khế ước nhận nợ_new
+   #Tính tổng dư nợ khế ước nhận nợ cho cho mỗi tài khoản vay
+        DUNO_KUNN = SUM OF OUTSTANDING_LCY each ACCOUNT_NUMBER
+   #Tính tổng giá trị đảm bảo cho khế ước cho mỗi tài khoản vay
+        TSBD_KUNN = SUM OF GIA_TRI_DAM_BAO_DINH_GIA each ACCOUNT_NUMBER   
+   #Tính quy đổi tổng dư nợ trên mỗi KUNN sang dư nợ trên mỗi TSBĐ
+        SUM_DUNO_MATSBD = [DUNO_KUNN]/[TSBD_KUNN]*[GIA_TRI_DAM_BAO_DINH_GIA]
+        MATCHING SUM_DUMNO_MATSBD (DƯ NỢ THEO MÃ TSBD) -> COLLATERAL_CODE
+   **Lưu ý: Đối với các trường hợp TSBD_KUNN = 0 thì SUM_DUNO_MATSBD nhận giá trị bằng 0.
+- Bước 8: Xác định cột (Giá trị tài sản hiện tại) (=) (số lượng CP) (x) Giá tham chiếu cổ phiếu tại ngày báo cáo. Trong đó, Giá tham chiếu cổ phiếu tại ngày báo cáo: Lấy từ trang điện tử sàn giao dịch chứng khoán. (Lấy tự động thông qua python và API của trang sàn giao dịch chứng khoán).
+- Bước 9: Cột (LTV hiện tại): (=) (Dư nợ cho vay theo tài sản)/(Giá trị tài sản hiện tại)
+- Bước 10: Cột (Chênh lệch LTV) = (Tỷ lệ % cho vay) - (LTV hiện tại).
+- Bước 11: Lọc chọn Cột (Chênh lệch LTV) < 0
