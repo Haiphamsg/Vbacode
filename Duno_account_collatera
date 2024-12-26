@@ -1,0 +1,75 @@
+Private Function CalculateLoanBalance(ByVal collateralCode As String, cl32Wb As Workbook) As Double
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim i As Long
+    Dim accountDict As Object
+    Dim collateralDict As Object
+    
+    Set ws = cl32Wb.Sheets(1)
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    ' Initialize dictionaries to store our aggregated values
+    Set accountDict = CreateObject("Scripting.Dictionary")
+    Set collateralDict = CreateObject("Scripting.Dictionary")
+    
+    ' Step 1: Calculate total loan balance and collateral value for each account
+    For i = 2 To lastRow
+        Dim accNum As String
+        Dim outstandingLcy As Double
+        Dim collateralValue As Double
+        
+        accNum = ws.Cells(i, FindColumnByHeader(ws, "ACCOUNT_NUMBER")).Value
+        
+        ' Get values from the relevant columns
+        outstandingLcy = SafeGetValue(ws.Cells(i, FindColumnByHeader(ws, "OUTSTANDING_LCY")))
+        collateralValue = SafeGetValue(ws.Cells(i, FindColumnByHeader(ws, "GIA_TRI_DAM_BAO_DINH_GIA")))
+        
+        ' If this account number hasn't been seen before, add it to the dictionary
+        ' If it exists, add to the running totals
+        If Not accountDict.Exists(accNum) Then
+            ' Store as array: [total outstanding, total collateral value]
+            accountDict(accNum) = Array(outstandingLcy, collateralValue)
+        Else
+            Dim currentValues As Variant
+            currentValues = accountDict(accNum)
+            ' Add new values to existing totals
+            accountDict(accNum) = Array(currentValues(0) + outstandingLcy, currentValues(1) + collateralValue)
+        End If
+    Next i
+    
+    ' Step 2: Calculate proportional loan balance for each collateral code
+    For i = 2 To lastRow
+        Dim acc As String
+        Dim tsbd As String
+        Dim values As Variant
+        
+        acc = ws.Cells(i, FindColumnByHeader(ws, "ACCOUNT_NUMBER")).Value
+        tsbd = ws.Cells(i, FindColumnByHeader(ws, "COLLATERAL_CODE")).Value
+        collateralValue = SafeGetValue(ws.Cells(i, FindColumnByHeader(ws, "GIA_TRI_DAM_BAO_DINH_GIA")))
+        
+        If accountDict.Exists(acc) Then
+            values = accountDict(acc)
+            
+            ' Calculate proportional loan balance only if collateral value exists
+            If values(1) <> 0 Then
+                Dim loanByCollateral As Double
+                ' Formula: (Total Outstanding / Total Collateral) * Individual Collateral Value
+                loanByCollateral = (values(0) / values(1)) * collateralValue
+                
+                ' Add to collateral dictionary, handling both new and existing entries
+                If Not collateralDict.Exists(tsbd) Then
+                    collateralDict(tsbd) = loanByCollateral
+                Else
+                    collateralDict(tsbd) = collateralDict(tsbd) + loanByCollateral
+                End If
+            End If
+        End If
+    Next i
+    
+    ' Return the calculated loan balance for the requested collateral code
+    If collateralDict.Exists(collateralCode) Then
+        CalculateLoanBalance = collateralDict(collateralCode)
+    Else
+        CalculateLoanBalance = 0
+    End If
+End Function
