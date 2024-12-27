@@ -1,0 +1,158 @@
+HƯỚNG DẪN THỰC HIỆN BÁO CÁO
+RÀ SOÁT DỮ LIỆU XẾP HẠNG TÍN DỤNG TẠI NAM Á BANK
+
+1.	Mục tiêu Báo cáo
+Hướng dẫn này được soạn thảo nhằm mục tiêu mô tả, hiển thị rõ quy trình, và nội dung thực hiện rà soát dữ liệu hệ thống xếp hạng tín dụng nhằm mục đích:
+•	Là cơ sở đánh giá, để thực hiện cải thiện và nâng cấp chất lượng dữ liệu phục vụ cho các dự án về xếp hạng tín dụng, quản lý rủi ro và các dự án khác liên quan tại Nam A Bank.
+•	Là dữ liệu đầu vào được chuẩn hóa, nhằm mục đích xây dựng mẫu báo cáo thực hiện hoạt động chấn chỉnh xếp hạng tín dụng trên toàn hệ thống tại Đơn vị kinh doanh, các Khối, phòng ban liên quan. 
+•	Hệ thống hóa phương pháp, quy trình và nội dung thực hiện, cho nội bộ nhân viên quản lý hệ thống xếp hạng tín dụng, Phòng Quản lý rủi ro tín dụng dễ dàng quản trị.
+•	Phục vụ các báo cáo và nội dung yêu cầu của cấp lãnh đạo khi cần thiết.
+ 
+2.	Giải thích từ ngữ
+–	IDE là Môi trường phát triển tích hợp (IDE) là một ứng dụng phần mềm hỗ trợ lập trình viên phát triển mã phần mềm một cách hiệu quả.
+–	DF (Dataframe): là một cấu trúc chứa dữ liệu hai chiều và các nhãn tương ứng của nó.
+–	Python: là một ngôn ngữ lập trình được sử dụng trong khoa học dữ liệu, phân tích dữ liệu và máy học (ML).
+–	EDA là một phương pháp khám phá dữ liệu, tìm ra các xu hướng, mẫu thử hoặc kiểm tra các giả định trong dữ liệu nhằm mục đích hiểu rõ về cấu trúc và tính chất của dữ liệu.
+3.	Tài liệu và công cụ thực hiện:
+	Quy định tại Nam A Bank
+•	Quy định xếp hạng tín dụng tại Nam Á Bank số 365/2019/QĐQT-NHNA
+•	Hướng dẫn thực hiện xếp hạng tín dụng tại Nam A Bank số 854/2019/HD-NHNA-24
+•	Quy trình xếp hạng tín dụng tại Nam Á Bank số 853/2019/QT-NHNA-24
+	Nguồn Dữ liệu trên hệ thống
+•	Dữ liệu trên hệ thống xếp hạng tín dụng, được lấy từ Phòng quản lý dịch vụ, Khối Công nghệ thông tin.
+•	Dữ liệu đối chiếu trên sao kê, được xuất trên hệ thống Report System
+	Công cụ:
+•	IDE sử dụng Vscode
+•	Ngôn ngữ Python
+4.	Quy trình thực hiện 
+Sơ đồ quy trình thực hiện
+
+
+
+
+
+
+
+
+
+
+5.	Nội dung thực hiện
+5.1.	Dữ liệu nguồn
+	Nguồn dữ liệu:
+–	Gửi thông tin yêu cầu cho Phòng quản lý dịch vụ, về thu thập dữ liệu xhtnb_all; xhtd_nam.
+–	Vào hệ thống report system (Với giả định rằng user đã được đăng ký chấp nhận quyền vào truy cập hệ thống), sau đó tìm kiếm báo cáo CL16 để xuất .
+5.2.	Cài đặt thư viện và công cụ thực hiện
+Cài đặt các thư viện thực hiện công cụ phân tích và rà soát dữ liệu sử dụng ngôn ngữ Python, bao gồm:
+ 
+5.3.	Thiết lập thư mục và xuất dữ liệu
+•	Chọn thư mục để tải dữ liệu lên ứng dụng để thực hiện phân tích
+•	Chọn thư mục xuất dữ liệu để thực hiện báo cáo
+ 
+5.4.	EDA (Explore Data Analyst) Khám phá dữ liệu
+5.4.1.	Mục tiêu của EDA
+Để hiểu dữ liệu hiện tại trên hệ thống đang có thực trạng, và các vấn đề đang có, bước đầu tiên cần trả lời những câu hỏi sau đây:
+•	Dữ liệu hiện tại đang thuộc dạng gì, đã được mô tả đầy đủ trong Data Dictionary?
+•	Sự phân bố của tập dữ liệu là gì?
+•	Có bất kỳ giá trị số, giá trị ngoại lệ hoặc điểm bất thường nào bị thiếu trong tập dữ liệu không?
+•	Các giả định cơ bản trong tập dữ liệu là gì?
+•	Làm cách nào để chắc chắn rằng tập dữ liệu của hệ thống đã sẵn sàng để đưa vào các dự án, mô hình hoặc thuật toán học máy?
+Vì vậy, cần thực hiện bước EDA để làm rõ các nội dung trên, để đạt được các mục tiêu như sau:
+•	Để có được cái nhìn tổng quan về việc phân phối tập dữ liệu.
+•	Kiểm tra các giá trị số bị thiếu, các giá trị ngoại lệ hoặc các điểm bất thường khác trong tập dữ liệu.
+5.4.2.	Các nội dung thực hiện chi tiết bao gồm
+•	Kiểm tra số lượng cột (danh sách trường dữ liệu thu thập) và số lượng hàng:
+print(df.shape)
+•	Kiểm tra chi tiết từng cột (tên biến, trường dữ liệu) đang có:
+print(df.columns)
+•	Hiển thị danh sách các cột và hàng của bảng dữ liệu
+Kiểm tra 5 hàng đầu tiên
+df.head()
+Kiểm tra 5 hàng cuối cùng
+df.tail()
+•	Kiểm tra định dạng dữ liệu, tổng các giá trị đang có của từng biến (trường dữ liệu), và giá trị bị thiếu.
+df.info()
+Thống kê dữ liệu
+•	Tổng giá trị đang có, min, max, trung bình, trung vị và các phân phối theo tỷ lệ
+df.describe()
+•	Thống kê các giá trị bị thiếu
+Missing_value(df)
+index	Data	Missing value
+0	CUSTOMER_NO	0.000000
+1	CUSTOMER_NAME	0.000000
+2	RATING_ID	0.000000
+3	SCORE	0.000000
+4	RATING_ID_2018	0.000000
+5	SCORE_2018	0.000000
+6	DIEM_new	0.000000
+7	S&P	0.000000
+8	Moody	0.000000
+9	PD-Lower	0.000000
+10	PD-Mid	0.000000
+11	PD-Upper	0.000000
+12	S&P_fix	0.000000
+13	DIEM_fix	0.000000
+14	GAP	0.000000
+15	Ma_KH	12.370062
+16	Nhom_no	12.370062
+
+5.5.	Chuẩn hóa dữ liệu và loại bỏ dữ liệu
+5.4.1.	   Lọc và loại bỏ biến
+	Giá trị thiếu hoặc Nan
+Xác định giá trị thiếu trong từng trường dữ liệu: thực hiện Missing_value(df)
+Xóa bỏ giá trị bị thiếu: df = df.dropna(subset = [column])
+	Loại bỏ khách hàng khác kỳ báo cáo 
+•	Lọc khách hàng khác kỳ báo cáo:
+Chỉ lấy khách hàng có kỳ báo cáo trong kỳ > = 1 của tháng đó
+df_new = df [df [' VERSION_DATE '] >= 1st_month]
+Với df là dataframe cần thực hiện
+Version_date là cột giá trị ngày xếp hạng của khách hàng
+•	Lọc dữ liệu cần thiết trên mỗi DF
+–	Đối với dữ liệu của xhtdnb_all
+Chọn lọc những trường dữ liệu hoặc biến cần thiết để thực hiện làm báo cáo:
+df.drop([‘columns'], axis=1, inplace=True) hoặc df_new = df.loc[:,[‘columns']]
+Chi tiết các cột (Columns) được hiển thị chi tiết qua các tables bên dưới
+Đối với Table: xhtdnb_all chỉ lấy các giá trị:
+CUSTOMER_NO; CUSTOMER_NAME; CUSTOMER_TYPE; AGE; DATE_OF_BIRTH; UNIQUE_ID_VALUE; CREATION_DATE; RATING_ID; SCORE; VERSION_NO; VERSION_DATE; CHECKER_DT_1; DEPT_MANAGE; FIN_SCORE; NON_FIN_SCORE
+–	Đối với dữ liệu Sao kê tín dụng (CL016-SAO_KE_CHI_TIET_CAC_KHOAN_VAY_TOAN_NGAN_HANG_2018), chỉ lấy các dữ liệu của các cột sau:
+"Mã CN"; Chi nhánh; Mã khách hàng; "Loại  KH"; Tên khách hàng; Nhóm nợ; CMND/GPKD; "Xếp hạng tín dụng"; Ngày xếp hạng gần nhất.
+
+
+5.4.2.	Chuyển định dạng 
+•	Ngày tháng năm
+–	Dữ liệu hiện tại chưa đồng nhất về dữ liệu thời gian, nên cần chuyển đổi dạng dữ liệu về định dạng này để dễ phân tích và chọn dữ liệu gần nhất được xếp hạng và đúng so với kỳ sao kê tín dụng.
+–	df[column datetime'] = pd.to_datetime(df[column datetime'], errors='coerce') 
+•	Kiểu dữ liệu
+–	Chuyển các dữ liệu dạng số từ dạng int64, float64 sang int32, float32 sang các dạng dữ liệu có bản ghi thấp hơn để dễ phân tích và thực hiện báo cáo, thống kê:
+–	convert_int(df, Columns_int)
+–	Trong đó df là dataframe cần thực hiện, Column_int là các cột cần chuyển kiểu dữ liệu
+•	In hoa
+–	Dữ liệu ghi nhận nhiều giá trị có dấu, dẫn đến khi xuất file hoặc ánh xạ, ý nghĩa bị thay đổi và khó thực hiện nên cần loại bỏ các dấu câu, chuyển đổi in hoa:
+–	convert_accents(df_accents, col_accents)
+–	Trong đó df là dataframe cần thực hiện, col_accents là các cột cần chuyển dạng in hoa
+5.6.	Mapping (Ánh xạ)
+Đối với dữ liệu trên hệ thống XHTD không có thông tin nhóm nợ, nên dùng phương pháp ánh xạ để thực hiện kết nối dữ liệu trên sao kê để lấy các thông tin này bằng việc đối chiếu ID khách hàng của tệp dữ liệu sao kê tín dụng và tệp dữ liệu Xếp hạng tín dụng. Chi tiết được thực hiện như sau:
+df_merge = df.merge(
+    df_saoketindung[['Ma_KH','Nhom_no']],
+    left_on= 'CUSTOMER_NO',
+    right_on= 'Ma_KH',
+    how= 'left')
+Sau khi đã thu thập được dữ liệu đầy đủ nhóm nợ, thực hiện tiếp các bước phân tích và làm thống kê
+5.7.	Phân tích, thống kê và Tổng hợp báo cáo
+•	Thống kê số lượng khách hàng đã xếp loại trong kỳ (Theo Tháng)
+create_rating_df(df, column='Rating_ID')
+–	Trong đó: 
+df là datafram cần thực hiện thống kê
+Rating ID là cột xếp hạng cần xếp hạng
+•	Thống kê số lượng khách hàng chưa xếp hạng theo quy định
+Số lượng khách hàng chưa xếp hạng gồm có:
+–	Khách hàng hiện hữu đang quan hệ tại Nam Á Bank là khách hàng chưa xếp hạng theo đúng Quy định số 365.
+–	Số lượng khách hàng có trên sao kê tín dụng nhưng chưa được xếp hạng tín dụng trong kỳ đánh giá.
+•	Thống kê khách hàng chuyển nhóm nợ, nhưng chưa chuyển xếp hạng
+Tính số lượng khách hàng đã chuyển nhóm nợ trong kỳ sang các nhóm nợ nhưng hệ thống xếp hạng tín dụng chưa tự động chuyển xếp hạng tương ứng.
+•	Thống kê sự chênh lệch của xếp hạng tín dụng và sao kê tín dụng
+Tính số lượng khách hàng có hạng được xếp trên sao kê tín dụng chênh lệch với hạng trên hệ thống xếp hạng tín dụng
+6.	Giám sát và theo dõi
+–	Thời gian nhận và yêu cầu dữ liệu muộn nhất ngày mồng 2 hằng tháng, phải có đầy đủ dữ liệu thực hiện.
+–	Thời gian gửi Báo cáo và tổng hợp dữ liệu ngay trong ngày thực hiện được dữ liệu, muộn nhất 17h cùng ngày.
+–	Thời gian gửi thông báo chấn chỉnh trên hệ thống trước ngày 06 hằng tháng.
+–	Nhận nội dung phản hồi và ghi nhận thông tin của các Đơn vị kinh doanh, các Khối có liên quan và báo cáo cấp trên trước ngày 10 hằng tháng.
